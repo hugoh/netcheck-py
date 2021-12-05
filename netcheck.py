@@ -63,10 +63,10 @@ class InternetChecker:
         else:
             msg = "Disconnected from"
         self.logger.info("%s the Internet", msg)
-        if self.on_disconnect:
+        if not self.online and self.on_disconnect:
             try:
+                self.logger.info("Running command on disconnect: %s", self.on_disconnect)
                 subprocess.run(self.on_disconnect, check=True)
-                self.logger.info("Ran %s", self.on_disconnect)
             except (subprocess.SubprocessError, FileNotFoundError) as err:
                 self.logger.error(err)
         self.status_changed = False
