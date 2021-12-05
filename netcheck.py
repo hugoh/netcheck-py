@@ -2,9 +2,12 @@
 import argparse
 import logging
 import subprocess
+import sys
 import time
 
 import requests
+
+LOGFILE = "log/connection.log"
 
 
 class InternetChecker:
@@ -16,11 +19,24 @@ class InternetChecker:
         self.down_after = down_after
         self.on_disconnect = on_disconnect
         self.status_changed = True
-        logging.basicConfig(
-            format="%(asctime)s %(message)s",
-            datefmt="%Y-%m-%dT%H:%M:%S",
-            level=logging.INFO,
+        self.setup_logger()
+        self.logger.info("Started")
+
+    def setup_logger(self):
+        self.logger = logging.getLogger()
+        self.logger.setLevel(logging.INFO)
+        formatter = logging.Formatter(
+            fmt="%(asctime)s: %(message)s", datefmt="%Y-%m-%dT%H:%M:%S"
         )
+        stdout_handler = logging.StreamHandler(sys.stdout)
+        stdout_handler.setFormatter(formatter)
+        self.logger.addHandler(stdout_handler)
+        try:
+            output_file_handler = logging.FileHandler(LOGFILE)
+            output_file_handler.setFormatter(formatter)
+            self.logger.addHandler(output_file_handler)
+        except FileNotFoundError as err:
+            self.logger.error("Cannot setup logging to file: %s", err)
 
     def record_success(self):
         if not self.online:
@@ -40,13 +56,13 @@ class InternetChecker:
             msg = "Connected to"
         else:
             msg = "Disconnected from"
-        logging.info("%s the Internet", msg)
+        self.logger.info("%s the Internet", msg)
         if self.on_disconnect:
             try:
                 subprocess.run(self.on_disconnect, check=True)
-                logging.info("Ran %s", self.on_disconnect)
+                self.logger.info("Ran %s", self.on_disconnect)
             except (subprocess.SubprocessError, FileNotFoundError) as err:
-                logging.error(err)
+                self.logger.error(err)
         self.status_changed = False
 
     def run(self):
