@@ -7,11 +7,9 @@ import time
 
 import requests
 
-LOGFILE = "log/connection.log"
-
 
 class InternetChecker:
-    def __init__(self, url, every, down_after, on_disconnect):
+    def __init__(self, url, every, down_after, logfile, on_disconnect):
         self.online = False
         self.failed_checks = 0
         self.url = url
@@ -19,24 +17,32 @@ class InternetChecker:
         self.down_after = down_after
         self.on_disconnect = on_disconnect
         self.status_changed = True
-        self.setup_logger()
-        self.logger.info("Started")
+        self.setup_logger(logfile)
+        self.logger.info(
+            "Started: monitoring %s every %ds; %d failures = disconnect",
+            url,
+            every,
+            down_after,
+        )
 
-    def setup_logger(self):
+    def setup_logger(self, logfile):
         self.logger = logging.getLogger()
         self.logger.setLevel(logging.INFO)
         formatter = logging.Formatter(
-            fmt="%(asctime)s: %(message)s", datefmt="%Y-%m-%dT%H:%M:%S"
+            fmt="%(asctime)s %(filename)s[%(process)d] %(message)s",
+            datefmt="%Y-%m-%dT%H:%M:%S",
         )
         stdout_handler = logging.StreamHandler(sys.stdout)
         stdout_handler.setFormatter(formatter)
         self.logger.addHandler(stdout_handler)
-        try:
-            output_file_handler = logging.FileHandler(LOGFILE)
-            output_file_handler.setFormatter(formatter)
-            self.logger.addHandler(output_file_handler)
-        except FileNotFoundError as err:
-            self.logger.error("Cannot setup logging to file: %s", err)
+        if logfile:
+            self.logger.info("Logging to %s", logfile)
+            try:
+                output_file_handler = logging.FileHandler(logfile)
+                output_file_handler.setFormatter(formatter)
+                self.logger.addHandler(output_file_handler)
+            except FileNotFoundError as err:
+                self.logger.error("Cannot setup logging to file: %s", err)
 
     def record_success(self):
         if not self.online:
@@ -95,10 +101,13 @@ if __name__ == "__main__":
         default=2,
         help="number of failures before considering the connection down",
     )
+    parser.add_argument("--logfile", type=str, help="File to log information to")
     parser.add_argument(
         "--on-disconnect", type=str, help="Command to execute on disconnect"
     )
     args = parser.parse_args()
 
-    ic = InternetChecker(args.url, args.every, args.down_after, args.on_disconnect)
+    ic = InternetChecker(
+        args.url, args.every, args.down_after, args.logfile, args.on_disconnect
+    )
     ic.run()
