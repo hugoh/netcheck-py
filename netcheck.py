@@ -14,12 +14,15 @@ class InternetChecker:
     def __init__(
         self, url, every, down_after, logfile, on_disconnect, rerun_command_every
     ):
-        self.failed_checks = -1
         self.url = url
         self.every = every
         self.down_after = down_after
         self.on_disconnect = on_disconnect
         self.rerun_command_every = rerun_command_every
+
+        self.__failed_checks = -1
+        self.__last_ondisconnect_run = -1
+
         self.setup_logger(logfile)
         self.logger.info(
             "Started: monitoring %s every %ds; %d failures = disconnect",
@@ -47,31 +50,39 @@ class InternetChecker:
             except FileNotFoundError as err:
                 self.logger.error("Cannot setup logging to file: %s", err)
 
+    def is_connected(self):
+        if self.__failed_checks < 0:
+            raise ValueError("Unknown state")
+        return self.__failed_checks < self.down_after
+
     def record_success(self):
-        if self.failed_checks != 0:
-            self.failed_checks = 0
+        if self.__failed_checks != 0:
+            self.__failed_checks = 0
             self.record_change()
 
     def record_failure(self):
-        self.failed_checks = max(self.failed_checks, 0) + 1
-        logging.info("Failed URL check; fail count = %d", self.failed_checks)
-        if self.failed_checks == self.down_after:
+        self.__failed_checks = max(self.__failed_checks, 0) + 1
+        logging.info("Failed URL check; fail count = %d", self.__failed_checks)
+        if self.__failed_checks == self.down_after:
             self.record_change()
             self.run_on_disconnect_command()
-        elif self.failed_checks > self.down_after:
-            if self.rerun_command_every > 0:
-                time_since_last_command_run = (
-                    (self.failed_checks - self.down_after) * self.every
-                ) % self.rerun_command_every
-                if time_since_last_command_run < self.every:
-                    self.run_on_disconnect_command()
+        elif self.__failed_checks > self.down_after:
+            if (
+                self.rerun_command_every > 0
+                and time.time() - self.__last_ondisconnect_run
+                > self.rerun_command_every
+            ):
+                self.run_on_disconnect_command()
 
     def record_change(self):
-        if self.failed_checks == 0:
+        if self.__failed_checks == 0:
             msg = "Connected to"
         else:
             msg = "Disconnected from"
         self.logger.info("%s the Internet", msg)
+
+    def __record_on_disconnect_command_run(self):
+        self.__last_ondisconnect_run = time.time()
 
     def run_on_disconnect_command(self):
         if self.on_disconnect:
@@ -80,16 +91,23 @@ class InternetChecker:
                     "Running command on disconnect: %s", self.on_disconnect
                 )
                 subprocess.run(self.on_disconnect, check=True)
+                self.__record_on_disconnect_command_run()
             except (subprocess.SubprocessError, FileNotFoundError) as err:
                 self.logger.error(err)
 
+    def check_if_connected(self):
+        try:
+            req = requests.get(self.url, timeout=TIMEOUT)
+            req.raise_for_status()
+            return True
+        except requests.exceptions.HTTPError:
+            return False
+
     def run(self):
         while True:
-            try:
-                req = requests.get(self.url, timeout=TIMEOUT)
-                req.raise_for_status()
+            if self.check_if_connected():
                 self.record_success()
-            except requests.exceptions.HTTPError:
+            else:
                 self.record_failure()
             time.sleep(self.every)
 
