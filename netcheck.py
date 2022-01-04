@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import logging
-from logging.handlers import SysLogHandler
+import logging.handlers
 import subprocess
 import sys
 import time
