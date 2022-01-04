@@ -8,7 +8,7 @@ import netcheck
 class MyTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self.down_after = 3
-        self.ic = netcheck.InternetChecker("", 1, self.down_after, "", "", -1)
+        self.ic = netcheck.InternetChecker("", 1, self.down_after, "", "", "", -1)
 
     def test_is_connected_unknown(self):
         with self.assertRaises(ValueError, msg="Unknown status"):
@@ -29,7 +29,7 @@ class MyTestCase(unittest.TestCase):
 
     def test_command_run(self):
         RERUN_EVERY = 2
-        ic = netcheck.InternetChecker("", 1, 1, "", "", RERUN_EVERY)
+        ic = netcheck.InternetChecker("", 1, 1, "", "", "", RERUN_EVERY)
         ic.run_on_disconnect_command = unittest.mock.Mock(side_effect=CommandRun)
         with self.assertRaises(CommandRun, msg="Command run on disconnect"):
             ic.record_failure()

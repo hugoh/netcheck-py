@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import logging
+from logging.handlers import SysLogHandler
 import subprocess
 import sys
 import time
@@ -12,7 +13,14 @@ TIMEOUT = 10
 
 class InternetChecker:
     def __init__(
-        self, url, every, down_after, logfile, on_disconnect, rerun_command_every
+        self,
+        url,
+        every,
+        down_after,
+        logfile,
+        syslog,
+        on_disconnect,
+        rerun_command_every,
     ):
         self.url = url
         self.every = every
@@ -23,7 +31,7 @@ class InternetChecker:
         self.__failed_checks = -1
         self.__last_ondisconnect_run = -1
 
-        self.setup_logger(logfile)
+        self.setup_logger(logfile, syslog)
         self.logger.info(
             "Started: monitoring %s every %ds; %d failures = disconnect",
             url,
@@ -31,16 +39,26 @@ class InternetChecker:
             down_after,
         )
 
-    def setup_logger(self, logfile):
+    def setup_logger(self, logfile, syslog):
         self.logger = logging.getLogger()
         self.logger.setLevel(logging.INFO)
         formatter = logging.Formatter(
-            fmt="%(asctime)s %(filename)s[%(process)d] %(message)s",
+            fmt="%(asctime)s %(filename)s[%(process)d]: %(message)s",
             datefmt="%Y-%m-%dT%H:%M:%S",
         )
         stdout_handler = logging.StreamHandler(sys.stdout)
         stdout_handler.setFormatter(formatter)
         self.logger.addHandler(stdout_handler)
+        if syslog:
+            self.logger.info("Logging to syslog via %s")
+            syslog_formatter = logging.Formatter(
+                fmt="%(filename)s[%(process)d]: %(message)s"
+            )
+            syslog_handler = logging.handlers.SysLogHandler(
+                address=syslog, facility=logging.handlers.SysLogHandler.LOG_DAEMON
+            )
+            syslog_handler.setFormatter(syslog_formatter)
+            self.logger.addHandler(syslog_handler)
         if logfile:
             self.logger.info("Logging to %s", logfile)
             try:
@@ -130,6 +148,7 @@ if __name__ == "__main__":
         help="number of failures before considering the connection down",
     )
     parser.add_argument("--logfile", type=str, help="File to log information to")
+    parser.add_argument("--syslog", type=str, help="Log to syslog via specified path")
     parser.add_argument(
         "--on-disconnect", type=str, help="Command to execute on disconnect"
     )
@@ -146,6 +165,7 @@ if __name__ == "__main__":
         args.every,
         args.down_after,
         args.logfile,
+        args.syslog,
         args.on_disconnect,
         args.rerun_command_every,
     )
